@@ -38,40 +38,165 @@
 		tableau.initCallback();
 	}
 */
-	myConnector.setConnection = function(access_token,refresh_token,user_id) {
-		var connData = [access_token,refresh_token,user_id];
+	myConnector.setConnection = function(project_name,run_token,api_token,columns) {
+		var connData = [run_token,columns];
+		tableau.password = api_token;
 		tableau.connectionData = JSON.stringify(connData);
-		tableau.connectionName = 'ParseHub'; // name the data source. This will be the data source name in Tableau
+		tableau.connectionName = project_name; // name the data source. This will be the data source name in Tableau
 	};
 
 	myConnector.getColumnHeaders = function() {
-		var fieldNames = ["ActivityDate","Steps","Distance","Floors","Calories","Elevation","minutesSedentary","minutesLightlyActive","minutesFairlyActive","minutesVeryActive","BMI","Fat","Weight"];
-		var fieldTypes = ["date","int","float","int","int","int","int","int","int","int","float","float","float"];
+		var columnInfo = JSON.parse(tableau.connectionData)[1];
+		var fieldNames = [];
+		var fieldTypes = [];
+		for (var i = 0; i < columnInfo.length;i++) {
+			fieldNames.push(columnInfo[i].name);
+			fieldTypes.push(columnInfo[i].type);
+		}
 		tableau.headersCallback(fieldNames, fieldTypes); // tell tableau about the fields and their types
 	};
 
 	myConnector.getTableData = function() {
-
-
+		var apiKey = tableau.password;
+		var runToken = JSON.parse(tableau.connectionData)[0];
+		var connectionUrl = "http://data.theinformationlab.co.uk/parsehub_callback.php?apikey=" + apiKey + "&req=data&runtoken=" + runToken;
+		var xhr = $.ajax({
+				url: connectionUrl,
+				dataType: 'json',
+				success: function (data) {
+					console.log(data);
+					var toRet = [];
+					for (var key in data) {
+						var obj = data[key];
+						toRet = toRet.concat(obj);
+					}
+					console.log(toRet);
+				  tableau.dataCallback(toRet, toRet.length.toString(), false);
+				}
+			});
 	};
 
 	tableau.registerConnector(myConnector);
 
+	var templates = [];
+
+	function buildHeader(templateJson) {
+		var projColumns = document.getElementsByClassName('header-selection');
+		projColumns[0].innerHTML = "";
+		var nodes = templateJson[0].nodes;
+		console.log(nodes);
+		for (var i = 0; i < nodes.length; i++) {
+			var group = document.createElement("fieldset");
+			var grpLabel = document.createElement("legend");
+			var nestedNodes = nodes[i];
+			console.log(nestedNodes);
+			while (nestedNodes.label == "") {
+				nestedNodes = nestedNodes.nodes[0];
+				console.log(nestedNodes);
+			}
+			grpLabel.innerHTML = nestedNodes.label;
+			group.appendChild(grpLabel);
+			var columns = nestedNodes.nodes[0].nodes;
+			var columnStr = JSON.stringify(columns);
+			var regex = /(?:variable\"\:\")([A-Za-z0-9]*)/g;
+			var curHeader = regex.exec(columnStr);
+			var headerTable = document.createElement("table");
+			while (curHeader) {
+				var headerRow = document.createElement("tr");
+			  var headerTitleCell = document.createElement("td");
+				var headerName = document.createElement("label");
+				headerName.innerHTML = curHeader[1];
+				headerTitleCell.appendChild(headerName);
+				var headerTypeCell = document.createElement("td");
+			  var headerTypeSelect = document.createElement("SELECT");
+			  headerTypeSelect.setAttribute('id',curHeader[1]);
+			  var stringOpt = document.createElement("option");
+			  stringOpt.text = "String";
+			  stringOpt.value = "string";
+			  headerTypeSelect.add(stringOpt);
+			  var booleanOpt = document.createElement("option");
+			  booleanOpt.text = "Boolean";
+			  booleanOpt.value = "bool";
+			  headerTypeSelect.add(booleanOpt);
+			  var dateOpt = document.createElement("option");
+			  dateOpt.text = "Date";
+			  dateOpt.value = "date";
+			  headerTypeSelect.add(dateOpt);
+			  var dateTimeOpt = document.createElement("option");
+			  dateTimeOpt.text = "Date & Time";
+			  dateTimeOpt.value = "datetime";
+			  headerTypeSelect.add(dateTimeOpt);
+			  var floatOpt = document.createElement("option");
+			  floatOpt.text = "Float";
+			  floatOpt.value = "float";
+			  headerTypeSelect.add(floatOpt);
+			  var intOpt = document.createElement("option");
+			  intOpt.text = "Integer";
+			  intOpt.value = "int";
+			  headerTypeSelect.add(intOpt);
+			  if (curHeader[1].toUpperCase().indexOf("DATE") > 0) {
+				headerTypeSelect.value = "date";
+			  } else {
+				headerTypeSelect.value = "string";
+			  }
+			  headerTypeCell.appendChild(headerTypeSelect);
+				headerRow.appendChild(headerTitleCell);
+			  headerRow.appendChild(headerTypeCell);
+			  headerTable.appendChild(headerRow);
+				curHeader = regex.exec(columnStr);
+			}
+			group.appendChild(headerTable);
+			projColumns[0].appendChild(group);
+		}
+	}
+
 	$(document).ready(function() {
 			//$('.button').hide();
 			$('.project').hide();
-			$('#letsgo').bind('click', function(){
+			$('#getprojects').bind('click', function(){
+				$('.ajax-loading').show();
 				var apiKey = $('input[type=text]').val().trim();
-				var connectionUrl = "https://www.parsehub.com/api/v2/projects?api_key=" + apiKey;
+				var connectionUrl = "http://data.theinformationlab.co.uk/parsehub_callback.php?apikey=" + apiKey + "&req=projects";
 				var xhr = $.ajax({
 		        url: connectionUrl,
 		        dataType: 'json',
 		        success: function (data) {
 							$('.welcome').hide();
 							$('.project').show();
+							$('input[type=hidden]').val(apiKey);
 							console.log(data);
+							var projectSelect = document.createElement("SELECT");
+						  projectSelect.setAttribute('id','projects');
+							var projects = data.projects;
+							for (var i = 0; i < projects.length; i++) {
+								templates[i] = JSON.parse(projects[i].templates_json);
+								var projoption = document.createElement("option");
+							  projoption.text = projects[i].title;
+							  projoption.value = projects[i].last_run.run_token;
+							  projectSelect.add(projoption);
+							}
+						  var projDescription = document.getElementsByClassName('project-selection');
+							projDescription[0].appendChild(projectSelect);
+							projectSelect.addEventListener('change',buildHeader(templates[projectSelect.selectedIndex]),false);
+							$('.ajax-loading').hide();
 						}
 					});
+			});
+			$('#getData').bind('click', function(){
+					$('.ajax-loading').show();
+					var apiKey = $('input[type=hidden]').val();
+					var x = document.getElementById('projects').selectedIndex;
+					var runToken = document.getElementById('projects')[x].value;
+					var columns = $('select');
+					var columnArr = [];
+					for (var i = 1; i < columns.length;i++) {
+						var column = {};
+						column.name = columns[i].id;
+						column.type = columns[i].value;
+						columnArr.push(column);
+					}
+					myConnector.setConnection(columns[0].selectedOptions[0].innerHTML,runToken,apiKey,columnArr);
+		      tableau.submit();
 			});
 	});
 
@@ -128,16 +253,19 @@
  		 <div class="tableauContainer ">
  				<h4 class="section-heading centre">Welcome to the ParseHub Web Data Connector for Tableau</h4>
  				<p class="centre"> <img src="images/parsehub.png" alt="parsehub" style="width:450px;height:100px;"> </p>
- 				<p class="section-description centre">Please enter your ParseHub API Key<br><input type="text" id="apiKey"></input></br><a class='button button-primary button-margin' id='letsgo'>Lets go!</a></p>
- 				<p class="section-logo centre"><a href="http://www.theinformationlab.co.uk"><img src="images/logo.png" alt="fitbit" style="width:188px;height:75px;"></a></p>
+ 				<p class="section-description centre">Please enter your ParseHub API Key<br><input type="text" id="apiKey"></input></br><a class='button button-primary button-margin' id='getprojects'>Get Projects!</a></p>
+ 				<p class="section-logo centre"><a href="http://www.theinformationlab.co.uk"><img src="images/logo.png" alt="The Information Lab" style="width:188px;height:75px;"></a></p>
  		 </div>
  </div>
  <div class="section project">
  		 <div class="tableauContainer ">
- 				<h4 class="section-heading centre">Welcome to the ParseHub Web Data Connector for Tableau</h4>
+ 				<h4 class="section-heading centre">Select a ParseHub Project</h4>
  				<p class="centre"> <img src="images/parsehub.png" alt="parsehub" style="width:450px;height:100px;"> </p>
- 				<p class="section-description centre">Please enter your ParseHub API Key<br><input type="text" id="apiKey"></input></br><a class='button button-primary button-margin' id='letsgo'>Lets go!</a></p>
- 				<p class="section-logo centre"><a href="http://www.theinformationlab.co.uk"><img src="images/logo.png" alt="fitbit" style="width:188px;height:75px;"></a></p>
+				<p class="section-description centre"><input type="hidden" id="apiKey"></input></p>
+ 				<p class="section-description centre project-selection"></p>
+				<p class="section-description centre header-selection"></p>
+				<p class="section-description centre"><a class='button button-primary button-margin' id='getData'>Get Data!</a></p>
+ 				<p class="section-logo centre"><a href="http://www.theinformationlab.co.uk"><img src="images/logo.png" alt="The Information Lab" style="width:188px;height:75px;"></a></p>
  		 </div>
  </div>
  </div>
