@@ -172,7 +172,7 @@
 								templates[i] = JSON.parse(projects[i].templates_json);
 								var projoption = document.createElement("option");
 							  projoption.text = projects[i].title;
-							  projoption.value = projects[i].last_run.run_token;
+							  projoption.value = projects[i].last_ready_run.run_token;
 							  projectSelect.add(projoption);
 							}
 						  var projDescription = document.getElementsByClassName('project-selection');
