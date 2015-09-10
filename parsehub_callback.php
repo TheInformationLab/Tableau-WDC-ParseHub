@@ -10,22 +10,25 @@ if(isset($_GET['req'])) {
 } else {
         $req = "";
 }
-if(isset($_GET['run_token'])) {
-        $run_token = $_GET['run_token'];
+if(isset($_GET['runtoken'])) {
+        $runtoken = $_GET['runtoken'];
 } else {
-        $run_token = "";
+        $runtoken = "";
 }
+$uncompress = false;
 switch ($req) {
         case 'projects':
                 $reqURL = 'https://www.parsehub.com/api/v2/projects?api_key='.$apikey;
                 break;
         case 'data':
-                $reqURL = 'https://www.parsehub.com/api/v2/runs/'.$run_token.'/data?api_key='.$apikey;
-                break;
+                $reqURL = 'compress.zlib://https://www.parsehub.com/api/v2/runs/'.$runtoken.'/data?api_key='.$apikey;
+                $uncompress=false;
+                 break;
         }
 $options = array(
         'http' => array(
-                'method' => 'GET'
+                'method' => 'GET',
+                'header'=>"Accept-Encoding: gzip\r\n"
         ),
 );
 $context  = stream_context_create($options);
@@ -34,7 +37,10 @@ $GETresult = @file_get_contents($reqURL , false, $context);
 if($GETresult === FALSE)
         {
                 echo "Invalid Request";
+        } elseif ($uncompress){
+                echo gzdecode($GETresult );
         } else {
-                echo $GETresult ;
+                echo $GETresult;
         }
+
 ?>

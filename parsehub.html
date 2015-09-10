@@ -11,7 +11,7 @@
 	  <link href='http://fonts.googleapis.com/css?family=Raleway:400,300,600' rel='stylesheet' type='text/css'>
 	  <link rel="stylesheet" href="css/normalize.css">
 	  <link rel="stylesheet" href="css/skeleton.css">
-	  <link rel="stylesheet" href="css/main.css">
+	  <link rel="stylesheet" href="css/parsehub-main.css">
 		<link rel="stylesheet" href="css/connector.css">
 	  <link href="css/bootstrap.min.css" rel="stylesheet">
 	  <link href="css/font-awesome.min.css" rel="stylesheet">
@@ -94,8 +94,8 @@
 				nestedNodes = nestedNodes.nodes[0];
 				console.log(nestedNodes);
 			}
-			grpLabel.innerHTML = nestedNodes.label;
-			group.appendChild(grpLabel);
+			//grpLabel.innerHTML = nestedNodes.label;
+			//group.appendChild(grpLabel);
 			var columns = nestedNodes.nodes[0].nodes;
 			var columnStr = JSON.stringify(columns);
 			var regex = /(?:variable\"\:\")([A-Za-z0-9]*)/g;
@@ -253,7 +253,14 @@
  		 <div class="tableauContainer ">
  				<h4 class="section-heading centre">Welcome to the ParseHub Web Data Connector for Tableau</h4>
  				<p class="centre"> <img src="images/parsehub.png" alt="parsehub" style="width:450px;height:100px;"> </p>
- 				<p class="section-description centre">Please enter your ParseHub API Key<br><input type="text" id="apiKey"></input></br><a class='button button-primary button-margin' id='getprojects'>Get Projects!</a></p>
+				<div class="group">
+					<input class="inputMaterial" type="text"  id="apiKey" required>
+					<span class="highlight"></span>
+					<span class="bar"></span>
+					<label>API Key</label>
+				</div>
+				<p class="section-description centre">Don't know your key?</p>
+				<p class="section-description centre"><a class='button button-primary button-margin' id='getprojects'>Get Projects!</a></p>
  				<p class="section-logo centre"><a href="http://www.theinformationlab.co.uk"><img src="images/logo.png" alt="The Information Lab" style="width:188px;height:75px;"></a></p>
  		 </div>
  </div>
