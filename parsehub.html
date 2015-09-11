@@ -27,17 +27,130 @@
 
 	<script type="text/javascript">
 
+	function isInArray(value, array) {
+		return array.indexOf(value) > -1;
+	}
+
+	function trim(str, chr) {
+  	var rgxtrim = (!chr) ? new RegExp('^\\s+|\\s+$', 'g') : new RegExp('^'+chr+'+|'+chr+'+$', 'g');
+  	return str.replace(rgxtrim, '');
+	}
+
+	function isInt(value) {
+	  var x;
+	  if (isNaN(value)) {
+	    return false;
+	  }
+	  x = parseFloat(value);
+	  return (x | 0) === x;
+	}
+
+	function getDataType(value){
+		var testValue = trim(value.trim(),'"');
+		if (typeof testValue == "number") {
+			if (isInt(testValue)) {
+				return "int";
+			} else {
+				return "float";
+			}
+		} else if (typeof testValue == "boolean") {
+			return "bool";
+		} else if (((testValue.match(/\//g)||[]).length == 2 || (testValue.match(/\-/g)||[]).length == 2) && (testValue.match(/\:/g)||[]).length == 2)  {
+			return "datetime";
+		} else if (((testValue.match(/\//g)||[]).length == 2 || (testValue.match(/\-/g)||[]).length == 2)) {
+			return "date";
+		} else {
+			return "string";
+		}
+	}
+
+	JSON.getNames = function(data) {
+		var headerArr = [];
+		var headerNamesTypes = [];
+		function recurse (value,name) {
+				if (Object(value) !== value) {
+						if (!isInArray(name, headerArr)) {
+							headerArr.push(name);
+							var headerVal = {};
+							headerVal.title = name;
+							if (name.toUpperCase().indexOf("DATE") > 0) {
+								headerVal.type = "date";
+							} else if (value.toLowerCase().indexOf("http") == 0) {
+								headerVal.type = "string";
+							} else {
+								headerVal.type = getDataType(value);
+							}
+							headerNamesTypes.push(headerVal);
+						}
+				} else if (Array.isArray(value)) {
+						 for(var i=0, l=value.length; i<l; i++) {
+							 recurse(value[i], "");
+						 }
+						if (l == 0) {
+								//console.log("Empty Array");
+						}
+				} else {
+						var isEmpty = true;
+						for (var p in value) {
+								isEmpty = false;
+								recurse(value[p], p);
+						}
+						if (isEmpty && name)
+								console.log("Empty Object");
+				}
+		}
+		recurse(data, "");
+		return headerNamesTypes;
+	}
+
+	JSON.getValues = function(data) {
+		var headerArr = [];
+		var valueArr = [];
+		var results = [];
+		function recurse (value,name) {
+				var entry = {};
+				if (Object(value) !== value) {
+						if (!isInArray(name, headerArr)) {
+							headerArr.push(name);
+							valueArr.push(value);
+						} else {
+							for (var i = 0; i < headerArr.length; i++) {
+								entry[headerArr[i]] = valueArr[i];
+							}
+							results.push(entry);
+							valueArr = valueArr.slice(0,headerArr.indexOf(name));
+							headerArr = headerArr.slice(0,headerArr.indexOf(name)+1);
+							valueArr.push(value);
+						}
+				} else if (Array.isArray(value)) {
+						 for(var i=0, l=value.length; i<l; i++) {
+							 recurse(value[i], "");
+						 }
+						if (l == 0) {
+								//console.log("Empty Array");
+						}
+				} else {
+						var isEmpty = true;
+						for (var p in value) {
+								isEmpty = false;
+								recurse(value[p], p);
+						}
+						if (isEmpty && name)
+								console.log("Empty Object");
+				}
+		}
+		recurse(data, "");
+		return results;
+	}
+
 	var myConnector = tableau.makeConnector();
-/*
+
 	myConnector.init = function() {
-		$('.section-description').html("In just a few clicks, you'll be able to get your Fitbit step, distance, floor counts and more. When you're ready, hit the button below and you'll be asked to give Tableau access to your Fitbit data. Once complete, an extract of your data will be created and you can start vizzing!.</br><a class='button button-primary button-margin' id='letsgo'>Lets go!</a>");
-		$('#letsgo').bind('click', function(){
-				$('.ajax-loading').show();
-				window.location.href = "https://www.fitbit.com/oauth2/authorize?response_type=token&client_id=229M2H&redirect_uri=http://data.theinformationlab.co.uk/fitbit.html&scope=activity%20nutrition%20heartrate%20location%20nutrition%20profile%20settings%20sleep%20social%20weight&expires_in=2592000";
-			});
+		$('.welcome').show();
+		$('.noTableau').hide();
 		tableau.initCallback();
 	}
-*/
+
 	myConnector.setConnection = function(project_name,run_token,api_token,columns) {
 		var connData = [run_token,columns];
 		tableau.password = api_token;
@@ -65,11 +178,7 @@
 				dataType: 'json',
 				success: function (data) {
 					console.log(data);
-					var toRet = [];
-					for (var key in data) {
-						var obj = data[key];
-						toRet = toRet.concat(obj);
-					}
+					var toRet = JSON.getValues(data);
 					console.log(toRet);
 				  tableau.dataCallback(toRet, toRet.length.toString(), false);
 				}
@@ -80,78 +189,62 @@
 
 	var templates = [];
 
-	function buildHeader(templateJson) {
+	function buildHeader(runToken,apiKey, callback) {
 		var projColumns = document.getElementsByClassName('header-selection');
 		projColumns[0].innerHTML = "";
-		var nodes = templateJson[0].nodes;
-		console.log(nodes);
-		for (var i = 0; i < nodes.length; i++) {
-			var group = document.createElement("fieldset");
-			var grpLabel = document.createElement("legend");
-			var nestedNodes = nodes[i];
-			console.log(nestedNodes);
-			while (nestedNodes.label == "") {
-				nestedNodes = nestedNodes.nodes[0];
-				console.log(nestedNodes);
-			}
-			//grpLabel.innerHTML = nestedNodes.label;
-			//group.appendChild(grpLabel);
-			var columns = nestedNodes.nodes[0].nodes;
-			var columnStr = JSON.stringify(columns);
-			var regex = /(?:variable\"\:\")([A-Za-z0-9]*)/g;
-			var curHeader = regex.exec(columnStr);
-			var headerTable = document.createElement("table");
-			while (curHeader) {
-				var headerRow = document.createElement("tr");
-			  var headerTitleCell = document.createElement("td");
-				var headerName = document.createElement("label");
-				headerName.innerHTML = curHeader[1];
-				headerTitleCell.appendChild(headerName);
-				var headerTypeCell = document.createElement("td");
-			  var headerTypeSelect = document.createElement("SELECT");
-			  headerTypeSelect.setAttribute('id',curHeader[1]);
-			  var stringOpt = document.createElement("option");
-			  stringOpt.text = "String";
-			  stringOpt.value = "string";
-			  headerTypeSelect.add(stringOpt);
-			  var booleanOpt = document.createElement("option");
-			  booleanOpt.text = "Boolean";
-			  booleanOpt.value = "bool";
-			  headerTypeSelect.add(booleanOpt);
-			  var dateOpt = document.createElement("option");
-			  dateOpt.text = "Date";
-			  dateOpt.value = "date";
-			  headerTypeSelect.add(dateOpt);
-			  var dateTimeOpt = document.createElement("option");
-			  dateTimeOpt.text = "Date & Time";
-			  dateTimeOpt.value = "datetime";
-			  headerTypeSelect.add(dateTimeOpt);
-			  var floatOpt = document.createElement("option");
-			  floatOpt.text = "Float";
-			  floatOpt.value = "float";
-			  headerTypeSelect.add(floatOpt);
-			  var intOpt = document.createElement("option");
-			  intOpt.text = "Integer";
-			  intOpt.value = "int";
-			  headerTypeSelect.add(intOpt);
-			  if (curHeader[1].toUpperCase().indexOf("DATE") > 0) {
-				headerTypeSelect.value = "date";
-			  } else {
-				headerTypeSelect.value = "string";
-			  }
-			  headerTypeCell.appendChild(headerTypeSelect);
-				headerRow.appendChild(headerTitleCell);
-			  headerRow.appendChild(headerTypeCell);
-			  headerTable.appendChild(headerRow);
-				curHeader = regex.exec(columnStr);
-			}
-			group.appendChild(headerTable);
-			projColumns[0].appendChild(group);
+		var connectionUrl = "http://data.theinformationlab.co.uk/parsehub_callback.php?apikey=" + apiKey + "&req=data&runtoken=" + runToken;
+		var xhr = $.ajax({
+				url: connectionUrl,
+				dataType: 'json',
+				success: function (data) {
+					var headers = JSON.getNames(data);
+					var headerTable = document.createElement("table");
+					for (var i = 0; i < headers.length; i++) {
+						var headerRow = document.createElement("tr");
+					  var headerTitleCell = document.createElement("td");
+						headerTitleCell.innerHTML = headers[i].title;
+						var headerTypeCell = document.createElement("td");
+					  var headerTypeSelect = document.createElement("SELECT");
+					  headerTypeSelect.setAttribute('id',headers[i].title);
+					  var stringOpt = document.createElement("option");
+					  stringOpt.text = "String";
+					  stringOpt.value = "string";
+					  headerTypeSelect.add(stringOpt);
+					  var booleanOpt = document.createElement("option");
+					  booleanOpt.text = "Boolean";
+					  booleanOpt.value = "bool";
+					  headerTypeSelect.add(booleanOpt);
+					  var dateOpt = document.createElement("option");
+					  dateOpt.text = "Date";
+					  dateOpt.value = "date";
+					  headerTypeSelect.add(dateOpt);
+					  var dateTimeOpt = document.createElement("option");
+					  dateTimeOpt.text = "Date & Time";
+					  dateTimeOpt.value = "datetime";
+					  headerTypeSelect.add(dateTimeOpt);
+					  var floatOpt = document.createElement("option");
+					  floatOpt.text = "Float";
+					  floatOpt.value = "float";
+					  headerTypeSelect.add(floatOpt);
+					  var intOpt = document.createElement("option");
+					  intOpt.text = "Integer";
+					  intOpt.value = "int";
+					  headerTypeSelect.add(intOpt);
+						headerTypeSelect.value = headers[i].type;
+					  headerTypeCell.appendChild(headerTypeSelect);
+						headerRow.appendChild(headerTitleCell);
+					  headerRow.appendChild(headerTypeCell);
+					  headerTable.appendChild(headerRow);
+					}
+					projColumns[0].appendChild(headerTable);
+					$('.ajax-loading').hide();
+				}
+			});
 		}
-	}
 
 	$(document).ready(function() {
 			//$('.button').hide();
+			$('.welcome').hide();
 			$('.project').hide();
 			$('#getprojects').bind('click', function(){
 				$('.ajax-loading').show();
@@ -169,16 +262,24 @@
 						  projectSelect.setAttribute('id','projects');
 							var projects = data.projects;
 							for (var i = 0; i < projects.length; i++) {
-								templates[i] = JSON.parse(projects[i].templates_json);
-								var projoption = document.createElement("option");
-							  projoption.text = projects[i].title;
-							  projoption.value = projects[i].last_ready_run.run_token;
-							  projectSelect.add(projoption);
+								if (projects[i].last_ready_run) {
+									var projoption = document.createElement("option");
+								  projoption.text = projects[i].title;
+								  projoption.value = projects[i].last_ready_run.run_token;
+								  projectSelect.add(projoption);
+								}
 							}
 						  var projDescription = document.getElementsByClassName('project-selection');
 							projDescription[0].appendChild(projectSelect);
-							projectSelect.addEventListener('change',buildHeader(templates[projectSelect.selectedIndex]),false);
-							$('.ajax-loading').hide();
+							projectSelect.addEventListener('change', function() {
+								$('.ajax-loading').show();
+								var x = this.selectedIndex;
+								var runToken = this[x].value;
+								buildHeader(runToken,apiKey);
+							});
+							var x = projectSelect.selectedIndex;
+							var runToken = projectSelect[x].value;
+							buildHeader(runToken,apiKey);
 						}
 					});
 			});
@@ -222,7 +323,7 @@
       <div class="nano-content">
 
         <ul>
-					<li class="active">
+					<li>
             <a href="fitbit.html"><i class="icon-fitbit" style="font-size:22px"></i>Fitbit</a>
           </li>
 					<li>
@@ -234,8 +335,8 @@
 					<li>
 						<a href="quandl.html"><i class="icon-quandl" style="font-size:22px"></i>Quandl</a>
 					</li>
-					<li>
-						<a href="directions.html"><i class="icon-Mapbox" style="font-size:22px"></i>ParseHub</a>
+					<li class="active">
+						<a href="parsehub.html"><i class="icon-parsehub" style="font-size:22px"></i>ParseHub</a>
 					</li>
 					<li>
 						<a href="directions.html"><i class="icon-Mapbox" style="font-size:22px"></i>Mapbox Directions</a>
@@ -249,6 +350,14 @@
   <!-- /Yay Sidebar -->
 <div class="content-wrap">
 <div class='ajax-loading' id='loadingDiv'> </div>
+<div class="section noTableau">
+		<div class="tableauContainer ">
+			 <h4 class="section-heading centre">Welcome to the ParseHub Web Data Connector for Tableau</h4>
+			 <p class="centre"> <img src="images/parsehub.png" alt="parsehub" style="width:450px;height:100px;"> </p>
+			 <p class="section-description centre">Please open this web data connector in Tableau version 9.1 or greater.<br/><a href="http://www.tableausoftware.com/partner-trial?id=19124">Click here to download a trial</a></p>
+			 <p class="section-logo centre"><a href="http://www.theinformationlab.co.uk"><img src="images/logo.png" alt="The Information Lab" style="width:188px;height:75px;"></a></p>
+		</div>
+</div>
  <div class="section welcome">
  		 <div class="tableauContainer ">
  				<h4 class="section-heading centre">Welcome to the ParseHub Web Data Connector for Tableau</h4>
@@ -259,7 +368,7 @@
 					<span class="bar"></span>
 					<label>API Key</label>
 				</div>
-				<p class="section-description centre">Don't know your key?</p>
+				<p class="section-description centre">Don't know your key?<br/>Browse to https://www.parsehub.com/account</p>
 				<p class="section-description centre"><a class='button button-primary button-margin' id='getprojects'>Get Projects!</a></p>
  				<p class="section-logo centre"><a href="http://www.theinformationlab.co.uk"><img src="images/logo.png" alt="The Information Lab" style="width:188px;height:75px;"></a></p>
  		 </div>

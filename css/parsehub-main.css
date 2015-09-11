@@ -26,6 +26,7 @@ label {
 	max-width: 300px;
 	text-align: center;
 	padding-bottom: 10px;
+	padding-top: 10px;
 }
 
 .inputMaterial 				{
@@ -67,7 +68,7 @@ label 				 {
   content:'';
   height:2px;
   width:0;
-  bottom:10px;
+  bottom:-1px;
   position:absolute;
   background: #4692CF;
   transition:0.2s ease all;
