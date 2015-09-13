@@ -45,7 +45,7 @@
 
 .icon-Mapbox:before { content: "\f106"; }
 .icon-Moves:before { content: "\f107"; }
-.icon-fitbit:before { content: "\f108"; }
+.icon-fitbit:before { content: "\f108";padding-left: 5px;padding-right: 5px; }
 .icon-parsehub:before { content: "\f109"; }
 .icon-quandl:before { content: "\f10a"; }
 .icon-strava:before { content: "\f10b"; }
